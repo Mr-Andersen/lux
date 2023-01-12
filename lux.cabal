@@ -12,6 +12,7 @@ common c
     DuplicateRecordFields
     StrictData
 
+    ApplicativeDo
     BangPatterns
     BinaryLiterals
     BlockArguments
@@ -53,14 +54,16 @@ library
     Lux.Common.Parsers
     Lux.Common.Types
     Lux.Input
-    Lux.Input.Interpret
+    Lux.Input.Interpreter
     Lux.Input.Match
     Lux.Input.Parsers
     Lux.Input.Types
+    -- Lux.Output.Interpreter
     Lux.Output.Parsers
     Lux.Output.Types
     Lux.Matches
     Lux.UnSpan
+    Text.Megaparsec.Braced
     Text.Megaparsec.Diagnostic
     Text.Megaparsec.NonEmpty
     Text.Megaparsec.SepBy
@@ -70,8 +73,7 @@ library
   build-depends:
     , base
     , containers
-    , comonad
-    , megaparsec
+    , megaparsec  ^>= 9.2.2
     , mtl
     , pretty
     , text
@@ -81,14 +83,18 @@ test-suite test
   type:           exitcode-stdio-1.0
   hs-source-dirs: test
   main-is:        Main.hs
-  other-modules:  TestParser
-                , Test.Input
-                , Test.Output
-                , TestTemplate
-  build-depends:  lux
-                , text
-                , quickcheck-text
-                , megaparsec
-                , tasty
-                , tasty-hunit
-                , tasty-quickcheck
+  other-modules:
+    , Test.Lux.Input.Interpreter
+    , Test.Lux.Input.Parsers
+  build-depends:
+    , lux
+    , base
+    , containers
+    , megaparsec
+    , mtl
+    , pretty
+    -- , quickcheck-text
+    , tasty
+    , tasty-hunit
+    -- , tasty-quickcheck
+    , text

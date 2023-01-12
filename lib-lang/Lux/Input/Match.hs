@@ -1,6 +1,7 @@
 module Lux.Input.Match where
 
 import Control.Monad.Except
+import Control.Monad.Reader (MonadReader)
 import Control.Monad.Writer
 import Data.Functor ((<&>))
 import Data.Functor.Identity (Identity (Identity, runIdentity))
@@ -39,10 +40,12 @@ deriving stock instance Show (Match Identity)
 deriving stock instance Eq (Match Spanned)
 deriving stock instance Show (Match Spanned)
 
--- TODO: top-level matches and inner match data are different (use GADT)
+-- | TODO: @s/span (Match span)/Match span/@ since @Match@ is already "spanned"
+-- | TODO: @s/Text/Spanned Text/@ to report duplication errors referring to KEYS not MATCHED VALUES (if there's still this warning)
 data MatchData span
   = MatchEmpty
   | MatchRecord (Map Text (span (Match span)))
+    -- | TODO: rethink usage of NonEmpty here (does it really add more convenience that inconvenience?)
   | MatchArray (NonEmpty (span (Match span)))
 
 deriving stock instance Eq (MatchData Identity)
@@ -68,7 +71,7 @@ instance Pretty (MatchData Identity) where
       <> "]"
 
 mergeData ::
-  (MonadError DiagnosticMessage m, MonadWriter [DiagnosticMessage] m, MonadParsec e Text m) =>
+  (MonadError DiagnosticMessage m, MonadWriter [DiagnosticMessage] m, MonadReader Text m) =>
   MatchData Spanned ->
   MatchData Spanned ->
   m (MatchData Spanned)
@@ -77,19 +80,32 @@ mergeData (MatchRecord rec) (MatchRecord rec') =
     <$> mergeA
       preserveMissing
       preserveMissing
-      ( zipWithAMatched \_ v v' ->
-          v' <$ diagnostic (Just "Repeating key in a record (preferring second value)")
-                  [ spanAs v "first value"
-                  , spanAs v' "second value"
-                  ]
-      )
+      (zipWithAMatched zipper)
       rec
       rec'
+  where
+    zipper _ x y = mergeData x.value.data_ y.value.data_ <&>
+      \data_ -> Spanned{spans = x.spans <> y.spans, value = Match{raw = x.value.raw <> y.value.raw, data_}}
+          -- v'
+          --   <$ diagnostic
+          --     (Just "Repeating key in a record (preferring second value)")
+          --     [ spanAs v "first value"
+          --     , spanAs v' "second value"
+          --     ]
 mergeData (MatchArray xs) (MatchArray ys) = pure $ MatchArray (xs <> ys)
 mergeData x MatchEmpty = pure x
 mergeData MatchEmpty x = pure x
 mergeData (MatchRecord rec) other | Map.null rec = pure other
 mergeData x y =
-    diagnosticThrow
-      (Just $ "Merging incompatible data: " <> pPrint (unSpan x) <> ", " <> pPrint (unSpan y))
-      []
+  diagnosticThrow
+    (Just $ "Merging incompatible data: " <> pPrint (unSpan x) <> ", " <> pPrint (unSpan y))
+    []
+
+mergeMatch ::
+  (MonadError DiagnosticMessage m, MonadWriter [DiagnosticMessage] m, MonadReader Text m) =>
+  Match Spanned ->
+  Match Spanned ->
+  m (Match Spanned)
+mergeMatch x y = do
+  data_ <- mergeData x.data_ y.data_
+  pure $ Match {raw = x.raw <> y.raw, data_}

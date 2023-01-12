@@ -1,10 +1,10 @@
 module Lux.Output.Types where
 
 import Data.Functor.Identity (Identity)
-import Lux.Common.Types (Identifier, StringLiteral)
-import Text.Megaparsec.Spanned (Spanned)
-import Text.Megaparsec.SepBy (SepBy)
+import Lux.Common.Types (FieldPath, Identifier, StringLiteral)
 import Lux.Input.Types (ChoiceSep, SequenceSep)
+import Text.Megaparsec.SepBy (SepBy)
+import Text.Megaparsec.Spanned (Spanned)
 
 type Output = OutputChoice
 
@@ -45,26 +45,3 @@ deriving stock instance Eq (OutputValue Identity)
 deriving stock instance Show (OutputValue Identity)
 deriving stock instance Eq (OutputValue Spanned)
 deriving stock instance Show (OutputValue Spanned)
-
--- | field-path = field ['.' field-path]
-newtype FieldPath span = FieldPath
-  { val :: SepBy (span FieldPathSep) (span Field)
-  }
-
-deriving stock instance Eq (FieldPath Identity)
-deriving stock instance Show (FieldPath Identity)
-deriving stock instance Eq (FieldPath Spanned)
-deriving stock instance Show (FieldPath Spanned)
-
-data FieldPathSep = FieldPathSep
-  deriving stock (Eq, Show)
-
--- | field = ident | index
-data Field
-  = NamedField Identifier
-  | IndexField Index
-  deriving stock (Eq, Show)
-
--- | index = decimal
-newtype Index = Index Integer
-  deriving newtype (Eq, Num, Show)

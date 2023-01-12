@@ -12,9 +12,10 @@
             lhx =
               final.haskell-nix.project' {
                 src = ./.;
-                compiler-nix-name = "ghc924";
+                compiler-nix-name = "ghc925";
                 shell = {
                   exactDeps = true;
+                  nativeBuildInputs = [ pkgs.nodejs-16_x ];
                   tools = {
                     cabal = {};
                     fourmolu = {};
@@ -32,7 +33,7 @@
 
   nixConfig = {
     extra-substituters = ["https://cache.iog.io"];
-    extra-trusted-public-keys = ["hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ="];
+    extra-trusted-public-keys = ["cache.iog.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ="];
     # allow-import-from-derivation = "true";
   };
 }
