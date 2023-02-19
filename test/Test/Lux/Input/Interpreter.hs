@@ -13,7 +13,7 @@ import Data.Text qualified as T (unpack)
 import Data.Traversable (for)
 import Data.Void (Void)
 import GHC.Exts (fromList)
-import Lux.Input.Interpreter (Context (Context), interpret, patterns, source)
+import Lux.Input.Interpreter (Context (Context), interpret, patterns, options, Options(Options, input, noArrayShortcut))
 import Lux.Input.Match (Match (Match, data_, raw), MatchData (MatchArray, MatchEmpty, MatchRecord))
 import Lux.Input.Parsers (pattern)
 import Lux.Input.Types (Pattern)
@@ -35,7 +35,7 @@ interpretId pat xs = do
   pat' <- pattern' pat
 
   parser <-
-    case interpret pat' & runWriterT & runExceptT & flip runReader Context {patterns = mempty, source = pat} of
+    case interpret pat' & runWriterT & runExceptT & flip runReader Context {patterns = mempty, options = Options{input = pat, noArrayShortcut = False}} of
       Left err -> fail $ ('\n' :) $ show $ pPrint err
       Right (parser, []) -> pure parser
       Right (_, warns) -> fail $ ('\n' :) $ show $ foldMap pPrint warns
@@ -58,6 +58,7 @@ tests =
   testGroup
     "Lux.Input.Interpreter tests"
     [ checkInterpret "str" ["abc"] [Match {raw = Identity "abc", data_ = MatchEmpty}]
+    , checkInterpret "[alpha][digit]" ["a1"] [Match {raw = Identity "a1", data_ = MatchArray (Identity Match {raw = "a", data_ = MatchEmpty} :| [Identity Match {raw = "1", data_ = MatchEmpty}])}]
     , checkInterpret "alpha+" ["abc"] [Match {raw = Identity "abc", data_ = MatchArray (Identity (Match {raw = Identity "a", data_ = MatchEmpty}) :| [Identity (Match {raw = Identity "b", data_ = MatchEmpty}), Identity (Match {raw = Identity "c", data_ = MatchEmpty})])}]
     , checkInterpret "{str}" ["abc"] [Match {raw = Identity "abc", data_ = MatchRecord (fromList [("str", Identity (Match {raw = Identity "abc", data_ = MatchEmpty}))])}]
     , checkInterpret "[alpha+][digit+]" ["abc123"] [Match {raw = Identity "abc123", data_ = MatchArray (Identity (Match {raw = Identity "a", data_ = MatchEmpty}) :| [Identity (Match {raw = Identity "b", data_ = MatchEmpty}), Identity (Match {raw = Identity "c", data_ = MatchEmpty}), Identity (Match {raw = Identity "1", data_ = MatchEmpty}), Identity (Match {raw = Identity "2", data_ = MatchEmpty}), Identity (Match {raw = Identity "3", data_ = MatchEmpty})])}]
@@ -78,8 +79,9 @@ tests =
         ["a", "1"]
         [ Match {raw = Identity "a", data_ = MatchRecord (fromList [("x",Identity (Match {raw = Identity "a", data_ = MatchEmpty}))])}
         , Match {raw = Identity "1", data_ = MatchRecord (fromList [("x",Identity (Match {raw = Identity "1", data_ = MatchEmpty}))])}]
-    , checkInterpret "{x:[alpha+][digit]}" ["ab1"] [Match {raw = Identity "ab1", data_ = MatchRecord (fromList [("x",Identity (Match {raw = Identity "ab1", data_ = MatchArray (Identity (Match {raw = Identity "a", data_ = MatchEmpty}) :| [Identity (Match {raw = Identity "b", data_ = MatchEmpty})])}))])}]
-    , checkInterpret "{x:[alpha+]\\,[digit]}" ["ab,1"] [Match {raw = Identity "ab,1", data_ = MatchRecord (fromList [("x",Identity (Match {raw = Identity "ab,1", data_ = MatchArray (Identity (Match {raw = Identity "a", data_ = MatchEmpty}) :| [Identity (Match {raw = Identity "b", data_ = MatchEmpty})])}))])}]
+    , checkInterpret "{x:[alpha+][digit]}" ["ab1"] [Match {raw = Identity "ab1", data_ = MatchRecord (fromList [("x",Identity (Match {raw = Identity "ab1", data_ = MatchArray (Identity (Match {raw = Identity "a", data_ = MatchEmpty}) :| [Identity (Match {raw = Identity "b", data_ = MatchEmpty}),Identity (Match {raw = Identity "1", data_ = MatchEmpty})])}))])}]
+    , checkInterpret "{x:[alpha+]\\,[digit]}" ["ab,1"] [Match {raw = Identity "ab,1", data_ = MatchRecord (fromList [("x",Identity (Match {raw = Identity "ab,1", data_ = MatchArray (Identity (Match {raw = Identity "a", data_ = MatchEmpty}) :| [Identity (Match {raw = Identity "b", data_ = MatchEmpty}),Identity (Match {raw = Identity "1", data_ = MatchEmpty})])}))])}]
+    , checkInterpret "{x:[alpha+][','][digit]}" ["ab,1"] [Match {raw = Identity "ab,1", data_ = MatchRecord (fromList [("x",Identity (Match {raw = Identity "ab,1", data_ = MatchArray (Identity (Match {raw = Identity "a", data_ = MatchEmpty}) :| [Identity (Match {raw = Identity "b", data_ = MatchEmpty}),Identity (Match {raw = Identity ",", data_ = MatchEmpty}),Identity (Match {raw = Identity "1", data_ = MatchEmpty})])}))])}]
     , checkInterpret "{x:[digit+]|{y:alpha}}" ["123", "a"] [Match {raw = Identity "123", data_ = MatchRecord (fromList [("x",Identity (Match {raw = Identity "123", data_ = MatchArray (Identity (Match {raw = Identity "1", data_ = MatchEmpty}) :| [Identity (Match {raw = Identity "2", data_ = MatchEmpty}),Identity (Match {raw = Identity "3", data_ = MatchEmpty})])}))])}, Match {raw = Identity "a", data_ = MatchRecord (fromList [("x",Identity (Match {raw = Identity "a", data_ = MatchRecord (fromList [("y",Identity (Match {raw = Identity "a", data_ = MatchEmpty}))])}))])}]
     , checkInterpret "{str:{str:str}}" ["abc"] [Match {raw = Identity "abc", data_ = MatchRecord (fromList [("str",Identity (Match {raw = Identity "abc", data_ = MatchRecord (fromList [("str",Identity (Match {raw = Identity "abc", data_ = MatchEmpty}))])}))])}]
     ]

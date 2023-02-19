@@ -29,9 +29,12 @@ import Text.Megaparsec.SepBy qualified as SepBy (singleton, values)
 import Text.Megaparsec.Spanned
 import Text.PrettyPrint.HughesPJClass (pPrint)
 
+data Options = Options { input :: Text, noArrayShortcut :: Bool }
+  deriving stock (Show)
+
 data Context p = Context
   { patterns :: Map Identifier (p (Match Spanned))
-  , source :: Text
+  , options :: Options
   }
 
 newtype BiList a b = BiList [(a, b)]
@@ -92,6 +95,12 @@ interpret spat = case spat.value of
           >>> replicateM n
           >>> fmap (maybe MatchEmpty MatchArray . nonEmpty)
           >>> dataToMatch
+  PPushArray Braced {value} ->
+    interpret value <&> \parser ->
+      spanned parser <&> \parsed ->
+        case parsed.value of
+          Match {data_ = MatchArray _} -> parsed.value
+          Match {raw, data_} -> Match {raw, data_ = MatchArray $ NE.singleton $ spanAs parsed $ Match {raw, data_}}
   PBindRecord (Braced {value}) -> case value.value of
     BindRaw {varName, pat} ->
       interpret pat >>= case varName.value of
@@ -100,7 +109,7 @@ interpret spat = case spat.value of
             case field.value of
               NamedField ident -> pure ident
               IndexField _ ->
-                withReaderM (.source) $
+                withReaderM (.options.input) $
                   diagnosticThrow Nothing [spanAs field "Only named fields are supported on left hand side of binding"]
           pure $
             spanned parser <&> \data_ ->
@@ -113,15 +122,9 @@ interpret spat = case spat.value of
                   fields'
               ).value
         BindDiscard -> spanned >>> fmap (const MatchEmpty) >>> dataToMatch >>> pure
-  PPushArray Braced {value} ->
-    interpret value <&> \parser -> do
-      parsed <- spanned parser
-      pure case parsed.value of
-        Match {data_ = MatchArray _} -> parsed.value
-        Match {raw, data_} -> Match {raw, data_ = MatchArray $ NE.singleton $ spanAs parsed $ Match {raw, data_}}
   PSequence (h :# t) -> bifoldl onSep onPat (interpretNested h) (BiList t)
     where
-      interpretNested Spanned {value = PPushArray pat} = interpret pat.value
+      interpretNested pat@Spanned {value = PPushArray _} = interpret pat
       interpretNested pat = interpret pat <&> \parser -> parser <&> \case
         Match {raw, data_ = MatchArray _} -> Match {raw, data_ = MatchEmpty}
         other -> other
@@ -129,7 +132,7 @@ interpret spat = case spat.value of
       onSep :: m (p (Match Spanned)) -> Spanned SequenceSep -> m (p (Match Spanned))
       onSep getPAcc ssep =
         getPAcc >>= \pacc -> do
-          source <- asks (.source)
+          source <- asks (.options.input)
           pure do
             acc <- pacc
             sepMb <- case ssep.value of
@@ -144,7 +147,7 @@ interpret spat = case spat.value of
       onPat :: m (p (Match Spanned)) -> Spanned (Pattern Spanned) -> m (p (Match Spanned))
       onPat getPAcc spat' =
         getPAcc >>= \pacc -> do
-          source <- asks (.source)
+          source <- asks (.options.input)
           ppat <- interpretNested spat'
           pure $ flip runReaderT source do
             acc <- lift pacc
@@ -173,7 +176,7 @@ getParserByIdent sident =
     ident -> do
       parserMb <- asks $ Map.lookup ident . (.patterns)
       case parserMb of
-        Nothing -> withReaderM (.source) $ diagnosticThrow Nothing [spanAs sident $ "Undefined parser " <> pPrint ident]
+        Nothing -> withReaderM (.options.input) $ diagnosticThrow Nothing [spanAs sident $ "Undefined parser " <> pPrint ident]
         Just ok -> pure ok
 
 charToMatch :: Spanned Char -> Match Spanned

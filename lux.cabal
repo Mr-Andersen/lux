@@ -47,9 +47,25 @@ common c
     -Wmissing-deriving-strategies
     -O2
 
+executable lux
+  import:           c
+  hs-source-dirs:   lux
+  main-is:          Main.hs
+  build-depends:
+    , lux
+    , aeson
+    , base
+    , bytestring
+    , containers
+    , megaparsec
+    , mtl
+    , optparse-applicative
+    , pretty
+    , text
+
 library
-  import:          c
-  hs-source-dirs:  lib-lang
+  import:           c
+  hs-source-dirs:   lib-lang
   exposed-modules:
     Lux.Common.Parsers
     Lux.Common.Types
